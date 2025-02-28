@@ -1,0 +1,101 @@
+import sqlite3
+import hashlib
+import os
+
+# Database connection and cursor
+def connect_db():
+    conn = sqlite3.connect('payment_transfer.db')
+    cursor = conn.cursor()
+    return conn, cursor
+
+# Create tables if they don't exist
+def create_tables():
+    conn, cursor = connect_db()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY,
+                        username TEXT NOT NULL,
+                        password TEXT NOT NULL,
+                        balance REAL DEFAULT 0.0)''')
+    conn.commit()
+    conn.close()
+
+# Hash password function
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Register a new user
+def register_user():
+    username = input("Enter username: ")
+    password = input("Enter password: ")
+    hashed_password = hash_password(password)
+    conn, cursor = connect_db()
+    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+    conn.commit()
+    conn.close()
+    print(f"User {username} registered successfully!")
+
+# User login function
+def login_user():
+    username = input("Enter username: ")
+    password = input("Enter password: ")
+    hashed_password = hash_password(password)
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, hashed_password))
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        print(f"Welcome back, {username}!")
+        return user[0], user[1], user[3]  # return user id, username, balance
+    else:
+        print("Invalid username or password!")
+        return None, None, None
+
+# View current balance
+def view_balance(user_id):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+    balance = cursor.fetchone()[0]
+    conn.close()
+    print(f"Your current balance is: ${balance:.2f}")
+
+# Transfer funds
+def transfer_funds(user_id):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+    balance = cursor.fetchone()[0]
+    conn.close()
+    print(f"Your current balance: ${balance:.2f}")
+    
+    if balance <= 0:
+        print("Insufficient funds!")
+        return
+    
+    receiver_username = input("Enter the username of the receiver: ")
+    amount = float(input("Enter amount to transfer: $"))
+    
+    if amount <= 0:
+        print("Invalid amount!")
+        return
+    
+    if amount > balance:
+        print("Insufficient funds!")
+        return
+    
+    # Check if receiver exists
+    conn, cursor = connect_db()
+    cursor.execute("SELECT id FROM users WHERE username = ?", (receiver_username,))
+    receiver = cursor.fetchone()
+    
+    if not receiver:
+        print("Receiver not found!")
+        conn.close()
+        return
+    
+    receiver_id = receiver[0]
+    
+    # Deduct from sender's account and add to receiver's account
+    cursor.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, receiver_id))
+    conn.commit()
+    conn.close()
+    print(f"Successfully transferred ${amount:.2f} to
